@@ -1,0 +1,12 @@
+var ALIASES = {};
+ALIASES["proc_macro2"] = {};
+ALIASES["proc_macro_hack"] = {};
+ALIASES["quote"] = {};
+ALIASES["rustversion"] = {};
+ALIASES["serde"] = {};
+ALIASES["serde_derive"] = {};
+ALIASES["syn"] = {};
+ALIASES["time"] = {};
+ALIASES["time_macros"] = {};
+ALIASES["time_macros_impl"] = {};
+ALIASES["unicode_xid"] = {};
