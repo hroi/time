@@ -117,7 +117,7 @@
 
 #![cfg_attr(doc, feature(doc_cfg))]
 #![cfg_attr(feature = "alloc", no_std)]
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 #![deny(
     anonymous_parameters,
     rust_2018_idioms,

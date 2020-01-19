@@ -237,6 +237,46 @@ impl UtcOffset {
     }
 }
 
+#[cfg(target_family = "windows")]
+impl UtcOffset {
+    #[allow(unsafe_code)]
+    pub fn local() -> Self {
+        use std::mem::MaybeUninit;
+        use winapi::um::{timezoneapi, winnt};
+        unsafe {
+            let mut tz_info = MaybeUninit::uninit();
+            let result = timezoneapi::GetDynamicTimeZoneInformation(tz_info.as_mut_ptr());
+
+            // The current bias for local time translation on this computer, in minutes.
+            // The bias is the difference, in minutes, between Coordinated Universal Time
+            // (UTC) and local time. All translations between UTC and local time are based
+            // on the following formula:
+            //
+            // UTC = local time + bias
+            let bias_mins = match result {
+                // Daylight saving time is not used in the current time zone,
+                // because there are no transition dates.
+                winnt::TIME_ZONE_ID_UNKNOWN => tz_info.assume_init().Bias,
+                // The system is operating in the range covered by the
+                // StandardDate member of the DYNAMIC_TIME_ZONE_INFORMATION structure.
+                winnt::TIME_ZONE_ID_STANDARD => {
+                    tz_info.assume_init().Bias + tz_info.assume_init().StandardBias
+                }
+                // The system is operating in the range covered by the DaylightDate
+                // member of the DYNAMIC_TIME_ZONE_INFORMATION structure
+                winnt::TIME_ZONE_ID_DAYLIGHT => {
+                    tz_info.assume_init().Bias + tz_info.assume_init().DaylightBias
+                }
+                // call failed somehow, return UTC
+                _ => return Self::UTC,
+            };
+            UtcOffset {
+                seconds: bias_mins * -60,
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -348,5 +388,10 @@ mod test {
 
         assert_eq!(UtcOffset::parse("+0001", "%z"), Ok(offset!(+0:01)));
         assert_eq!(UtcOffset::parse("-0001", "%z"), Ok(offset!(-0:01)));
+    }
+
+    #[test]
+    fn local() {
+        let _ = UtcOffset::local();
     }
 }

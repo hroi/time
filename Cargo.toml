@@ -25,6 +25,9 @@ serde = { version = "1", optional = true, default-features = false, features = [
 time-macros = { version = "0.1", path = "time-macros" }
 rustversion = "1"
 
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["timezoneapi", "winnt"] }
+
 [workspace]
 members = [
     "time-macros",
