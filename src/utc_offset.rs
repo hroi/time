@@ -238,15 +238,16 @@ impl UtcOffset {
 }
 
 #[cfg(target_family = "windows")]
-use std::{convert::TryFrom, mem::MaybeUninit};
-#[cfg(target_family = "windows")]
-use winapi::{
-    shared::minwindef,
-    um::{minwinbase, timezoneapi, winnt},
+use {
+    std::{convert::TryFrom, mem::MaybeUninit},
+    winapi::{
+        shared::minwindef,
+        um::{minwinbase, timezoneapi, winnt},
+    },
 };
 #[cfg(target_family = "windows")]
 impl UtcOffset {
-    fn to_systemtime(datetime: time::PrimitiveDateTime) -> minwinbase::SYSTEMTIME {
+    fn primitive_to_systemtime(datetime: time::PrimitiveDateTime) -> minwinbase::SYSTEMTIME {
         let (month, day_of_month) = datetime.month_day();
         minwinbase::SYSTEMTIME {
             wYear: datetime.date.year() as u16,
@@ -283,7 +284,7 @@ impl UtcOffset {
     #[allow(unsafe_code)]
     pub fn local_offset_at(datetime: time::PrimitiveDateTime) -> Self {
         // This function falls back to Self::UTC if any system call fails.
-        let systime_utc = Self::to_systemtime(datetime);
+        let systime_utc = Self::primitive_to_systemtime(datetime);
         let systime_local = unsafe {
             let mut lt = MaybeUninit::uninit();
             if 0 == timezoneapi::SystemTimeToTzSpecificLocalTime(
