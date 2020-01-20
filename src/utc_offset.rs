@@ -238,11 +238,92 @@ impl UtcOffset {
 }
 
 #[cfg(target_family = "windows")]
+use std::{convert::TryFrom, mem::MaybeUninit};
+#[cfg(target_family = "windows")]
+use winapi::{
+    shared::minwindef,
+    um::{minwinbase, timezoneapi, winnt},
+};
+#[cfg(target_family = "windows")]
 impl UtcOffset {
+    fn to_systemtime(datetime: time::PrimitiveDateTime) -> minwinbase::SYSTEMTIME {
+        let (month, day_of_month) = datetime.month_day();
+        minwinbase::SYSTEMTIME {
+            wYear: datetime.date.year() as u16,
+            wMonth: month as u16,
+            wDay: day_of_month as u16,
+            wDayOfWeek: 0, // ignored
+            wHour: datetime.time.hour() as u16,
+            wMinute: datetime.time.minute() as u16,
+            wSecond: datetime.time.second() as u16,
+            wMilliseconds: datetime.time.millisecond(),
+        }
+    }
+
+    #[allow(unsafe_code)]
+    fn systemtime_to_filetime(systime: &minwinbase::SYSTEMTIME) -> Option<minwindef::FILETIME> {
+        let mut ft = MaybeUninit::uninit();
+        unsafe {
+            if 0 == timezoneapi::SystemTimeToFileTime(systime, ft.as_mut_ptr()) {
+                // failed
+                None
+            } else {
+                Some(ft.assume_init())
+            }
+        }
+    }
+
+    #[allow(unsafe_code)]
+    fn filetime_to_secs(filetime: &minwindef::FILETIME) -> i64 {
+        // FILETIME represents 100-nanosecond intervals
+        const FT_TO_SECS: i64 = 10_000_000;
+
+        unsafe {
+            let mut large_int: winnt::ULARGE_INTEGER = MaybeUninit::zeroed().assume_init();
+            large_int.u_mut().LowPart = filetime.dwLowDateTime;
+            large_int.u_mut().HighPart = filetime.dwHighDateTime as i32;
+            *large_int.QuadPart() as i64 / FT_TO_SECS
+        }
+    }
+
+    #[allow(unsafe_code)]
+    pub fn local_offset_at(datetime: time::PrimitiveDateTime) -> Self {
+        // This function falls back to Self::UTC if any system call fails.
+        let systime_utc = Self::to_systemtime(datetime);
+        let systime_local = unsafe {
+            let mut lt = MaybeUninit::uninit();
+            if 0 == timezoneapi::SystemTimeToTzSpecificLocalTime(
+                std::ptr::null(), // use system's current timezone
+                &systime_utc,
+                lt.as_mut_ptr(),
+            ) {
+                // call failed
+                return Self::UTC;
+            } else {
+                lt.assume_init()
+            }
+        };
+
+        // Convert SYSTEMTIMEs to FILETIMEs so we can perform arithmentic on them.
+
+        let ft_system = match Self::systemtime_to_filetime(&systime_utc) {
+            Some(ft) => ft,
+            None => return Self::UTC,
+        };
+        let ft_local = match Self::systemtime_to_filetime(&systime_local) {
+            Some(ft) => ft,
+            None => return Self::UTC,
+        };
+
+        let diff_secs = Self::filetime_to_secs(&ft_local) - Self::filetime_to_secs(&ft_system);
+
+        i32::try_from(diff_secs)
+            .map(|s| Self { seconds: s })
+            .unwrap_or(Self::UTC)
+    }
+
     #[allow(unsafe_code)]
     pub fn local() -> Self {
-        use std::mem::MaybeUninit;
-        use winapi::um::{timezoneapi, winnt};
         unsafe {
             let mut tz_info = MaybeUninit::uninit();
             let result = timezoneapi::GetDynamicTimeZoneInformation(tz_info.as_mut_ptr());
@@ -393,5 +474,11 @@ mod test {
     #[test]
     fn local() {
         let _ = UtcOffset::local();
+    }
+
+    #[test]
+    fn local_offset_at() {
+        let now = time::PrimitiveDateTime::now();
+        let _ = UtcOffset::local_offset_at(now);
     }
 }

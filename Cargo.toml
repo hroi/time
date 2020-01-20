@@ -26,7 +26,7 @@ time-macros = { version = "0.1", path = "time-macros" }
 rustversion = "1"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["timezoneapi", "winnt"] }
+winapi = { version = "0.3", features = ["minwinbase", "minwindef", "timezoneapi", "winnt"] }
 
 [workspace]
 members = [
