@@ -273,17 +273,11 @@ impl UtcOffset {
         }
     }
 
-    #[allow(unsafe_code)]
     fn filetime_to_secs(filetime: &minwindef::FILETIME) -> i64 {
-        // FILETIME represents 100-nanosecond intervals
+        /// FILETIME represents 100-nanosecond intervals
         const FT_TO_SECS: i64 = 10_000_000;
 
-        unsafe {
-            let mut large_int: winnt::ULARGE_INTEGER = MaybeUninit::zeroed().assume_init();
-            large_int.u_mut().LowPart = filetime.dwLowDateTime;
-            large_int.u_mut().HighPart = filetime.dwHighDateTime as i32;
-            *large_int.QuadPart() as i64 / FT_TO_SECS
-        }
+        ((filetime.dwHighDateTime as i64) << 32 | filetime.dwLowDateTime as i64) / FT_TO_SECS
     }
 
     #[allow(unsafe_code)]
